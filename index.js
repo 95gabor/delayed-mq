@@ -1,6 +1,7 @@
 const {connect} = require('amqplib');
 
 const queue = process.env.QUEUE || 'test';
+const exchange = process.env.EXCHANGE || 'delay-exchange';
 const username = process.env.RABBITMQ_USERNAME || '';
 const password = process.env.RABBITMQ_PASSWORD || '';
 const host = process.env.RABBITMQ_HOST || 'localhost';
@@ -19,10 +20,12 @@ async function connectMQ() {
 
 async function publisher() {
   const channel = await connectMQ();
-  await channel.sendToQueue(queue, Buffer.from('something to do'), {
-    headers: {
-      "x-delay": 5000,
-    }
+
+  channel.assertExchange(exchange, "x-delayed-message", {autoDelete: false, durable: true, passive: true,  arguments: {'x-delayed-type':  "direct"}});
+  channel.bindQueue(queue, exchange, queue);
+
+  await channel.publish(exchange, queue, Buffer.from('something to do'), {
+    headers: { "x-delay": 5000 }
   });
   console.log('[PUBLISHER]', 'published');
 }
@@ -31,7 +34,7 @@ async function consumer(idx) {
   const channel = await connectMQ();
   await channel.consume(queue, msg => {
     if (!msg) {
-      return;
+      return channel.reject(msg);
     }
     console.log('[CONSUMER]', idx, msg.content.toString());
     channel.ack(msg);
