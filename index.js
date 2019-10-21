@@ -18,16 +18,21 @@ async function connectMQ() {
   return channel;
 }
 
+async function publish(channel) {
+  channel.publish(exchange, queue, Buffer.from('something to do'), {
+    headers: { "x-delay": 5000 }
+  });
+  // console.log('[PUBLISHER]', 'published');
+  setTimeout(() => publish(channel), Math.random() * 3000 + 2000);
+}
+
 async function publisher() {
   const channel = await connectMQ();
 
   channel.assertExchange(exchange, "x-delayed-message", {autoDelete: false, durable: true, passive: true,  arguments: {'x-delayed-type':  "direct"}});
   channel.bindQueue(queue, exchange, queue);
 
-  await channel.publish(exchange, queue, Buffer.from('something to do'), {
-    headers: { "x-delay": 5000 }
-  });
-  console.log('[PUBLISHER]', 'published');
+  publish(channel);
 }
 
 async function consumer(idx) {
